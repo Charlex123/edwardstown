@@ -13,9 +13,10 @@ async function main() {
 
   console.log('Deploying contract...');
 
+  const initialBalance = ethers.utils.parseEther("0.0055");
   // We get the contract to deploy
   const Contract = await ethers.getContractFactory(CollectionConfig.contractName);
-  const contract = await Contract.deploy(...ContractArguments) as NftContractType;
+  const contract = await Contract.deploy({value: initialBalance}) as NftContractType;
 
   await contract.deployed();
 

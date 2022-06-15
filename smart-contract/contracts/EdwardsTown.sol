@@ -1290,8 +1290,8 @@ contract EdwardsTown is ERC721A, Ownable, ReentrancyGuard {
     uint256 public maxMintPerWallet = 5;
     uint256 public maxFreeMintPerWallet = 1;
     uint8 public freeMintAmount = 10;
-    bool public isPublicMintEnabled;
-    bool public isFreeMintEnabled;
+    uint8 public mintCount;
+    bool public isMintEnabled;
     string internal baseTokenUri = "ipfs://QmNVSvyLPe3TPkwepmmVM2xEP24dxWhNuF3defXXjTFMtw/";
     address payable public withdrawWalletAddress;
     mapping(address => uint256) public walletMints;
@@ -1299,18 +1299,19 @@ contract EdwardsTown is ERC721A, Ownable, ReentrancyGuard {
     constructor() payable ERC721A('EdwardsTown', 'EDWT') {
         // set withdrawal wallet address;
         withdrawWalletAddress = payable(0xFCbB69B9CE13bec64a76878dbFF64e8e787f75Cf);
+        mintCount = 0;
     }
 
-    function setIsPublicMintEnabled(bool isPublicMintEnabled_) external onlyOwner {
-        isPublicMintEnabled = isPublicMintEnabled_;
-    }
-
-    function setIsFreeMintEnabled(bool isFreeMintEnabled_) external onlyOwner {
-        isFreeMintEnabled = isFreeMintEnabled_;
+    function setIsMintEnabled(bool isMintEnabled_) external onlyOwner {
+        isMintEnabled = isMintEnabled_;
     }
 
     function getbaseTokenUri() public view returns (string memory) {
     return baseTokenUri;
+  }
+
+  function getMintCount() public view returns (uint8) {
+    return mintCount;
   }
 
   function _baseTokenUri() internal view returns (string memory) {
@@ -1331,34 +1332,30 @@ contract EdwardsTown is ERC721A, Ownable, ReentrancyGuard {
     }
     
     function withdraw() external payable onlyOwner{
-        (bool success, ) = payable(withdrawWalletAddress).call{value: address(this).balance }('');
+        (bool success, ) = withdrawWalletAddress.call{value: address(this).balance }('');
         require(success, 'withdraw failed');
     }
 
-    function freemint(uint256 quantity_) public payable {
-        require(isFreeMintEnabled, "Free Minting not enabled yet");
-        require(totalSupply() + quantity_ < freeMintAmount, "All free mints have been claimed");
-        require(walletMints[msg.sender] + quantity_ <= maxFreeMintPerWallet, "Free Mint Limit Reached For This Wallet");
+    function mint(uint256 quantity_) public payable returns(uint8) {
+        require(isMintEnabled, "Minting not enabled yet");
+        
+        if(mintCount <= freeMintAmount) {
+            require(msg.value == 0, "We are still in the free mint phase");
+            require(walletMints[msg.sender] + quantity_ <= maxFreeMintPerWallet, "Free mint limit is 1(one)");
+            walletMints[msg.sender] += quantity_;
+            mintCount++;
+            _safeMint(msg.sender, quantity_);
+        }else {
+            require(msg.value != 0, "All free mints already claimed, pay 0.0055 ETH to mint");
+            require(walletMints[msg.sender] + quantity_ <= maxMintPerWallet, "Mint Limit Is 5 ");
+            require(totalSupply() <= maxSupply, "sold out");
 
-        walletMints[msg.sender] += quantity_;
-        _safeMint(msg.sender, quantity_);
-        // for(uint256 i = 0; i < quantity_; i++) {
-        //     uint256 newTokenId = totalSupply() + 1;
-        //     uint256 totalSup = totalSupply();
-        //     totalSup++;
-            
-        // }
-    }
-
-    function mint(uint256 quantity_) public payable {
-        require(isPublicMintEnabled, "Minting not enabled");
-        require(msg.value >= quantity_ * mintPrice, "wrong mint value");
-        require(totalSupply()  <= freeMintAmount, "We are still in free mint phase");
-        require(totalSupply() * quantity_ <= maxSupply, "sold out");
-        require(walletMints[msg.sender] + quantity_ <= maxMintPerWallet, "Mint Limit Reached For This Wallet Address");
-
-        walletMints[msg.sender] += quantity_;
-        _safeMint(msg.sender, quantity_);
+            walletMints[msg.sender] += quantity_;
+            mintCount++;
+            _safeMint(msg.sender, quantity_);
+        }
+        
+        return mintCount;
     }
 }
 
